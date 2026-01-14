@@ -17,3 +17,5 @@ opencv-python-headless
 qwen-vl-utils
 accelerate>=0.26.0
 torchvision
+
+numpy==1.26.4

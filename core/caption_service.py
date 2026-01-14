@@ -4,6 +4,7 @@ from qwen_vl_utils import process_vision_info
 from threading import Thread
 
 
+
 class CaptionService:
     def __init__(self):
         print("🔄 Loading Qwen2-VL-2B model...")
@@ -75,15 +76,8 @@ class CaptionService:
         for new_text in streamer:
             yield new_text
 
-    def extract_text_ocr(self, image_url: str):
-        """
-        利用 Qwen2-VL 做纯 OCR 任务
-        """
-        # 1. 专门的 OCR Prompt
-        # Qwen-VL 对 "Read the text" 这种指令响应很好
-        prompt = "请识别并提取图片中的所有文字，不要包含任何描述性语言，直接输出识别到的内容。如果包含多行，请换行。"
+    def generate_text(self, image_url: str, prompt: str):
 
-        # 2. 构造消息
         messages = [
             {
                 "role": "user",
@@ -94,7 +88,6 @@ class CaptionService:
             }
         ]
 
-        # 3. 预处理
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -107,19 +100,66 @@ class CaptionService:
             return_tensors="pt",
         ).to(self.device)
 
-        # 4. 生成 (非流式)
-        # max_new_tokens 设置大一点，防止文字太长被截断
         generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
 
-        # 5. 解码
         generated_ids_trimmed = [
             out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
         output_text = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
-
         return output_text[0]
+
+    def generate_text_list(self, image_url: str, prompt: str, num_sequences: int = 3) -> list[str]:
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image_url},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+
+        # 处理视觉信息
+        image_inputs, video_inputs = process_vision_info(messages)
+
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+
+        # 核心修改 1: 设置生成参数
+        generated_ids = self.model.generate(
+            **inputs,
+            max_new_tokens=1024,
+            num_return_sequences=num_sequences,  # 关键：告诉模型要生成几条
+            do_sample=True,  # 关键：必须开启采样，否则生成的几条内容会完全一样
+            temperature=0.7  # 可选：控制随机性，越高越发散
+        )
+
+        # 核心修改 2: 修复截断逻辑
+        input_token_len = inputs.input_ids.shape[1]
+
+        generated_ids_trimmed = [
+            out_ids[input_token_len:] for out_ids in generated_ids
+        ]
+
+        # 核心修改 3: 批量解码
+        # batch_decode 本身就会返回 list[str]
+        output_text_list = self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+
+        return output_text_list
 
 
 # 单例模式

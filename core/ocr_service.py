@@ -8,7 +8,7 @@ class OCRService:
         # use_angle_cls=True: 支持识别旋转文字
         # lang='ch': 支持中英文
         # show_log=False: 关掉烦人的日志
-        self.ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+        self.ocr = PaddleOCR(use_angle_cls=True, lang='ch')
         print("✅ PaddleOCR loaded.")
 
     def extract_text(self, image):
