@@ -1,0 +1,126 @@
+import torch
+from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, TextIteratorStreamer
+from qwen_vl_utils import process_vision_info
+from threading import Thread
+
+
+class CaptionService:
+    def __init__(self):
+        print("🔄 Loading Qwen2-VL-2B model...")
+        self.model_path = "Qwen/Qwen2-VL-2B-Instruct"
+
+        # M1 芯片使用 mps 加速
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+
+        # 加载模型 (使用 bfloat16 以节省内存并加速)
+        # 注意: M1 对 bf16 支持较好
+        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+            self.model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=self.device
+        )
+
+        # 加载处理器
+        self.processor = AutoProcessor.from_pretrained(self.model_path)
+        print(f"✅ Qwen2-VL loaded on {self.device}.")
+
+    def stream_generate(self, image_url: str, prompt: str = "请详细描述这张图片"):
+        """
+        流式生成图片描述
+        """
+        # 1. 构造消息格式
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image_url},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+
+        # 2. 预处理输入
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+
+        # 3. 设置流式输出
+        streamer = TextIteratorStreamer(
+            self.processor.tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True
+        )
+
+        generation_kwargs = dict(
+            **inputs,
+            streamer=streamer,
+            max_new_tokens=512,
+            temperature=0.7,  # 0.7 比较有创造力，适合写文案
+            do_sample=True
+        )
+
+        # 4. 在新线程中启动生成 (因为 generate 是阻塞的)
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
+
+        # 5. 生成器：不断 yield 新生成的字符
+        for new_text in streamer:
+            yield new_text
+
+    def extract_text_ocr(self, image_url: str):
+        """
+        利用 Qwen2-VL 做纯 OCR 任务
+        """
+        # 1. 专门的 OCR Prompt
+        # Qwen-VL 对 "Read the text" 这种指令响应很好
+        prompt = "请识别并提取图片中的所有文字，不要包含任何描述性语言，直接输出识别到的内容。如果包含多行，请换行。"
+
+        # 2. 构造消息
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image_url},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+
+        # 3. 预处理
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+
+        # 4. 生成 (非流式)
+        # max_new_tokens 设置大一点，防止文字太长被截断
+        generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
+
+        # 5. 解码
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        output_text = self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+
+        return output_text[0]
+
+
+# 单例模式
+caption_service = CaptionService()

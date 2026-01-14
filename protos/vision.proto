@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package ai.inference;
+
+// 生成 Java 代码时的包路径
+option java_package = "com.smart.vision.core.grpc";
+option java_outer_classname = "VisionProto";
+
+service VisionService {
+  // 1. 获取文本向量
+  rpc EmbedText (TextRequest) returns (EmbeddingResponse);
+
+  // 2. 获取图片向量
+  rpc EmbedImage (ImageRequest) returns (EmbeddingResponse);
+
+  // 3. 提取文字 (OCR)
+  rpc ExtractText (ImageRequest) returns (OcrResponse);
+}
+
+message TextRequest {
+  string text = 1;
+}
+
+message ImageRequest {
+  string url = 1;
+}
+
+message EmbeddingResponse {
+  repeated float vector = 1;
+  int32 dim = 2; // 维度信息
+}
+
+message OcrResponse {
+  string full_text = 1; // 所有文字拼成一个字符串
+  repeated string lines = 2; // 分行详情
+}
