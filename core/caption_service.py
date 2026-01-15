@@ -1,29 +1,35 @@
 import torch
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, TextIteratorStreamer
+import os
+from transformers import Qwen3VLForConditionalGeneration, AutoProcessor, TextIteratorStreamer
 from qwen_vl_utils import process_vision_info
 from threading import Thread
 
 torch.set_num_threads(4)
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 class CaptionService:
     def __init__(self):
-        print("🔄 Loading Qwen2-VL-2B model...")
-        self.model_path = "Qwen/Qwen2-VL-2B-Instruct"
+        print("🔄 Loading Qwen3-VL-2B model...")
+        self.model_path = "Qwen/Qwen3-VL-2B-Instruct"
 
         # M1 芯片使用 mps 加速
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
 
         # 加载模型 (使用 float16 以节省内存并加速)
         # 注意: M1 对 bf16 支持较好
-        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+        self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             self.model_path,
-            torch_dtype=torch.bfloat16,
-            device_map=self.device
+            dtype=torch.bfloat16,
+            device_map=self.device,
+            trust_remote_code=True
         )
 
         # 加载处理器
-        self.processor = AutoProcessor.from_pretrained(self.model_path, max_pixels=602112)
-        print(f"✅ Qwen2-VL loaded on {self.device}.")
+        self.processor = AutoProcessor.from_pretrained(
+            self.model_path,
+            max_pixels=602112,
+            trust_remote_code=True)
+        print(f"✅ Qwen3-VL loaded on {self.device}.")
 
     # def __init__(self):
     #     print("🔄 Loading Qwen2-VL-2B model...")
