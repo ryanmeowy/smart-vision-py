@@ -18,6 +18,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
     def EmbedText(self, request, context):
         try:
             print(f"📝 Request EmbedText: {request.text}")
+            # vector = caption_service.get_embedding(request.text, None)
             vector = embedding_service.embed_text(request.text)
             return vision_pb2.EmbeddingResponse(vector=vector, dim=len(vector))
         except Exception as e:
@@ -32,6 +33,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             # 1. 下载图片
             image = load_image_from_url(request.url)
             # 2. 计算向量
+            # vector = caption_service.get_embedding(None, image)
             vector = embedding_service.embed_image(image)
             return vision_pb2.EmbeddingResponse(vector=vector, dim=len(vector))
         except Exception as e:
@@ -97,8 +99,8 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             print(f"🔍 Request gen tag: {request.image_url}")
             image = load_image_from_url(request.image_url)
             prompt = request.prompt if request.prompt else """请分析这张图片，提取 3-5 个核心标签，包含物体、场景、风格。 请直接返回一个 JSON 字符串数组，不要包含 Markdown 格式或其他废话。例如：["风景", "雪山", "日落"]"""
-            name = caption_service.generate_text_list(image, prompt, 5)
-            return vision_pb2.GenTagsResponse(name=name)
+            name = caption_service.generate_text_list(image, prompt)
+            return vision_pb2.GenTagsResponse(tag=name)
         except Exception as e:
             print(f"Error: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)

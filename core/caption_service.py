@@ -3,6 +3,7 @@ import os
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor, TextIteratorStreamer
 from qwen_vl_utils import process_vision_info
 from threading import Thread
+import torch.nn.functional as F
 
 torch.set_num_threads(4)
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
@@ -30,30 +31,6 @@ class CaptionService:
             max_pixels=602112,
             trust_remote_code=True)
         print(f"✅ Qwen3-VL loaded on {self.device}.")
-
-    # def __init__(self):
-    #     print("🔄 Loading Qwen2-VL-2B model...")
-    #     self.model_path = "Qwen/Qwen2-VL-2B-Instruct"
-    #
-    #     # ❌ 原来的写法 (会导致 MPS Bug)
-    #     # self.device = "mps" if torch.backends.mps.is_available() else "cpu"
-    #
-    #     # ✅ 修改为：强制使用 CPU (避开 MPS 驱动 Bug)
-    #     self.device = "cpu"
-    #     print(f"⚠️ Force using device: {self.device} for stability")
-    #
-    #     # 加载模型
-    #     # 注意：CPU 不支持 float16/bfloat16 计算，必须用 float32 (默认)
-    #     # 或者使用 "auto" 让它自己选
-    #     self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-    #         self.model_path,
-    #         torch_dtype=torch.float32,  # 让 CPU 自己决定精度 (通常是 float32)
-    #         device_map=self.device
-    #     )
-    #
-    #     # 加载处理器
-    #     self.processor = AutoProcessor.from_pretrained(self.model_path)
-    #     print(f"✅ Qwen2-VL loaded on {self.device}.")
 
     def stream_generate(self, image_url: str, prompt: str = "请详细描述这张图片"):
         """
@@ -140,7 +117,7 @@ class CaptionService:
         )
         return output_text[0]
 
-    def generate_text_list(self, image_url: str, prompt: str, num_sequences: int = 3) -> list[str]:
+    def generate_text_list(self, image_url: str, prompt: str) -> list[str]:
 
         messages = [
             {
@@ -171,9 +148,9 @@ class CaptionService:
         generated_ids = self.model.generate(
             **inputs,
             max_new_tokens=1024,
-            num_return_sequences=num_sequences,  # 关键：告诉模型要生成几条
+            num_return_sequences=1,  # 关键：告诉模型要生成几条
             do_sample=True,  # 关键：必须开启采样，否则生成的几条内容会完全一样
-            temperature=0.7  # 可选：控制随机性，越高越发散
+            temperature=1  # 可选：控制随机性，越高越发散
         )
 
         # 核心修改 2: 修复截断逻辑
@@ -190,6 +167,49 @@ class CaptionService:
         )
 
         return output_text_list
+
+    @torch.no_grad()
+    def get_embedding(self, text=None, image_url=None):
+        """
+        【新增方法】利用 Instruct 模型硬算向量
+        """
+        # 1. 构造输入 (同生成逻辑)
+        messages = []
+        content = []
+        if image_url:
+            content.append({"type": "image", "image": image_url})
+        if text:
+            content.append({"type": "text", "text": text})
+
+        messages.append({"role": "user", "content": content})
+
+        # 2. 预处理
+        text_prompt = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(
+            text=[text_prompt],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt"
+        ).to(self.device)
+
+        # 3. 运行 Forward (注意：output_hidden_states=True)
+        outputs = self.model(**inputs, output_hidden_states=True)
+
+        # 4. 提取特征
+        # 取最后一层 hidden state: [batch, seq_len, hidden_size]
+        last_hidden_state = outputs.hidden_states[-1]
+
+        # 策略：取 Mean Pooling (平均值) 或者 Last Token (EOS)
+        # 这里用 Mean Pooling 比较稳
+        embedding = last_hidden_state.mean(dim=1)
+
+        # 5. 归一化 (ES Cosine 必需)
+        embedding = F.normalize(embedding, p=2, dim=1)
+
+        # 6. 转列表
+        return embedding.float().cpu().numpy()[0].tolist()
 
 
 # 单例模式
