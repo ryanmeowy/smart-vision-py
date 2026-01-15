@@ -13,7 +13,9 @@ paddlepaddle
 paddleocr
 opencv-python-headless
 
-# Qwen2-VL 依赖
+# Qwen3-VL 依赖
 qwen-vl-utils
 accelerate>=0.26.0
 torchvision
+
+numpy==1.26.4
