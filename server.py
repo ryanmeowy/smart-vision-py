@@ -8,9 +8,9 @@ import vision_pb2_grpc
 
 # 导入业务逻辑
 from core.embedding_service import embedding_service
-from core.ocr_service import ocr_service
 from utils.image_loader import load_image_from_url
 from core.caption_service import caption_service
+from core.ocr_service import ocr_service
 
 
 class VisionServer(vision_pb2_grpc.VisionServiceServicer):
@@ -40,20 +40,20 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_details(str(e))
             return vision_pb2.EmbeddingResponse()
 
-    def ExtractText(self, request, context):
-        try:
-            print(f"🔍 Request OCR: {request.url}")
-            image = load_image_from_url(request.url)
-            prompt = request.prompt if request.prompt else "请精确提取图中的所有文本内容，包括印刷体和清晰的手写体。请忽略水印，并丢弃无意义的文本（如单个标点符号、无上下文的孤立字符）。若图中没有文本、文本无法识别或难以识别，请输出“-1”。若有文本，请直接输出提取到的文本，不要输出任何与图中文本无关的内容。"
-            full_text = caption_service.generate_text(image, prompt)
-            lines = full_text.split('\n')
-            lines = [line.strip() for line in lines if line.strip()]
-            return vision_pb2.OcrResponse(full_text=full_text, lines=lines)
-        except Exception as e:
-            print(f"Error: {e}")
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            return vision_pb2.OcrResponse()
+    # def ExtractText(self, request, context):
+    #     try:
+    #         print(f"🔍 Request OCR: {request.image_url}")
+    #         image = load_image_from_url(request.image_url)
+    #         prompt = request.prompt if request.prompt else "请精确提取图中的所有文本内容，包括印刷体和清晰的手写体。请忽略水印，并丢弃无意义的文本（如单个标点符号、无上下文的孤立字符）。若图中没有文本、文本无法识别或难以识别，请输出“-1”。若有文本，请直接输出提取到的文本，不要输出任何与图中文本无关的内容。"
+    #         full_text = caption_service.generate_text(image, prompt)
+    #         lines = full_text.split('\n')
+    #         lines = [line.strip() for line in lines if line.strip()]
+    #         return vision_pb2.OcrResponse(full_text=full_text, lines=lines)
+    #     except Exception as e:
+    #         print(f"Error: {e}")
+    #         context.set_code(grpc.StatusCode.INTERNAL)
+    #         context.set_details(str(e))
+    #         return vision_pb2.OcrResponse()
 
     def GenerateCaption(self, request, context):
         """
@@ -81,8 +81,8 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
 
     def GenerateFileName(self, request, context):
         try:
-            print(f"🔍 Request gen file name: {request.url}")
-            image = load_image_from_url(request.url)
+            print(f"🔍 Request gen file name: {request.image_url}")
+            image = load_image_from_url(request.image_url)
             prompt = request.prompt if request.prompt else "为所附图片生成一个3-6字的中文图片名，要求简洁、达意、富有美感，直接输出名称即可。"
             name = caption_service.generate_text(image, prompt)
             return vision_pb2.GenFileNameResponse(name=name)
@@ -94,8 +94,8 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
 
     def GenerateTags(self, request, context):
         try:
-            print(f"🔍 Request gen tag: {request.url}")
-            image = load_image_from_url(request.url)
+            print(f"🔍 Request gen tag: {request.image_url}")
+            image = load_image_from_url(request.image_url)
             prompt = request.prompt if request.prompt else """请分析这张图片，提取 3-5 个核心标签，包含物体、场景、风格。 请直接返回一个 JSON 字符串数组，不要包含 Markdown 格式或其他废话。例如：["风景", "雪山", "日落"]"""
             name = caption_service.generate_text_list(image, prompt, 5)
             return vision_pb2.GenTagsResponse(name=name)
@@ -104,6 +104,18 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return vision_pb2.GenTagsResponse()
+
+    def ExtractText(self, request, context):
+        try:
+            print(f"🔍 Request OCR: {request.image_url}")
+            image = load_image_from_url(request.image_url)
+            result = ocr_service.extract_text(image)
+            return vision_pb2.OcrResponse(full_text=result[0], lines=result[1])
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return vision_pb2.OcrResponse()
 
 
 def serve():

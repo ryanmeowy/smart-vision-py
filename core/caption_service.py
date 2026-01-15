@@ -3,7 +3,7 @@ from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, TextIte
 from qwen_vl_utils import process_vision_info
 from threading import Thread
 
-
+torch.set_num_threads(4)
 
 class CaptionService:
     def __init__(self):
@@ -13,7 +13,7 @@ class CaptionService:
         # M1 芯片使用 mps 加速
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-        # 加载模型 (使用 bfloat16 以节省内存并加速)
+        # 加载模型 (使用 float16 以节省内存并加速)
         # 注意: M1 对 bf16 支持较好
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             self.model_path,
@@ -22,8 +22,32 @@ class CaptionService:
         )
 
         # 加载处理器
-        self.processor = AutoProcessor.from_pretrained(self.model_path)
+        self.processor = AutoProcessor.from_pretrained(self.model_path, max_pixels=602112)
         print(f"✅ Qwen2-VL loaded on {self.device}.")
+
+    # def __init__(self):
+    #     print("🔄 Loading Qwen2-VL-2B model...")
+    #     self.model_path = "Qwen/Qwen2-VL-2B-Instruct"
+    #
+    #     # ❌ 原来的写法 (会导致 MPS Bug)
+    #     # self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+    #
+    #     # ✅ 修改为：强制使用 CPU (避开 MPS 驱动 Bug)
+    #     self.device = "cpu"
+    #     print(f"⚠️ Force using device: {self.device} for stability")
+    #
+    #     # 加载模型
+    #     # 注意：CPU 不支持 float16/bfloat16 计算，必须用 float32 (默认)
+    #     # 或者使用 "auto" 让它自己选
+    #     self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+    #         self.model_path,
+    #         torch_dtype=torch.float32,  # 让 CPU 自己决定精度 (通常是 float32)
+    #         device_map=self.device
+    #     )
+    #
+    #     # 加载处理器
+    #     self.processor = AutoProcessor.from_pretrained(self.model_path)
+    #     print(f"✅ Qwen2-VL loaded on {self.device}.")
 
     def stream_generate(self, image_url: str, prompt: str = "请详细描述这张图片"):
         """
