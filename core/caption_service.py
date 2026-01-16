@@ -8,16 +8,14 @@ import torch.nn.functional as F
 torch.set_num_threads(4)
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
+
 class CaptionService:
     def __init__(self):
         print("🔄 Loading Qwen3-VL-2B model...")
         self.model_path = "Qwen/Qwen3-VL-2B-Instruct"
 
-        # M1 芯片使用 mps 加速
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-        # 加载模型 (使用 float16 以节省内存并加速)
-        # 注意: M1 对 bf16 支持较好
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             self.model_path,
             dtype=torch.bfloat16,
@@ -25,7 +23,6 @@ class CaptionService:
             trust_remote_code=True
         )
 
-        # 加载处理器
         self.processor = AutoProcessor.from_pretrained(
             self.model_path,
             max_pixels=602112,
@@ -33,10 +30,6 @@ class CaptionService:
         print(f"✅ Qwen3-VL loaded on {self.device}.")
 
     def stream_generate(self, image_url: str, prompt: str = "请详细描述这张图片"):
-        """
-        流式生成图片描述
-        """
-        # 1. 构造消息格式
         messages = [
             {
                 "role": "user",
@@ -47,7 +40,6 @@ class CaptionService:
             }
         ]
 
-        # 2. 预处理输入
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -60,7 +52,6 @@ class CaptionService:
             return_tensors="pt",
         ).to(self.device)
 
-        # 3. 设置流式输出
         streamer = TextIteratorStreamer(
             self.processor.tokenizer,
             skip_prompt=True,
@@ -71,15 +62,13 @@ class CaptionService:
             **inputs,
             streamer=streamer,
             max_new_tokens=512,
-            temperature=0.7,  # 0.7 比较有创造力，适合写文案
+            temperature=0.7,
             do_sample=True
         )
 
-        # 4. 在新线程中启动生成 (因为 generate 是阻塞的)
         thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
         thread.start()
 
-        # 5. 生成器：不断 yield 新生成的字符
         for new_text in streamer:
             yield new_text
 
@@ -133,7 +122,6 @@ class CaptionService:
             messages, tokenize=False, add_generation_prompt=True
         )
 
-        # 处理视觉信息
         image_inputs, video_inputs = process_vision_info(messages)
 
         inputs = self.processor(
@@ -144,24 +132,20 @@ class CaptionService:
             return_tensors="pt",
         ).to(self.device)
 
-        # 核心修改 1: 设置生成参数
         generated_ids = self.model.generate(
             **inputs,
             max_new_tokens=1024,
-            num_return_sequences=1,  # 关键：告诉模型要生成几条
-            do_sample=True,  # 关键：必须开启采样，否则生成的几条内容会完全一样
-            temperature=1  # 可选：控制随机性，越高越发散
+            num_return_sequences=1,
+            do_sample=True,
+            temperature=1
         )
 
-        # 核心修改 2: 修复截断逻辑
         input_token_len = inputs.input_ids.shape[1]
 
         generated_ids_trimmed = [
             out_ids[input_token_len:] for out_ids in generated_ids
         ]
 
-        # 核心修改 3: 批量解码
-        # batch_decode 本身就会返回 list[str]
         output_text_list = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
@@ -170,10 +154,7 @@ class CaptionService:
 
     @torch.no_grad()
     def get_embedding(self, text=None, image_url=None):
-        """
-        【新增方法】利用 Instruct 模型硬算向量
-        """
-        # 1. 构造输入 (同生成逻辑)
+
         messages = []
         content = []
         if image_url:
@@ -183,7 +164,6 @@ class CaptionService:
 
         messages.append({"role": "user", "content": content})
 
-        # 2. 预处理
         text_prompt = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, video_inputs = process_vision_info(messages)
         inputs = self.processor(
@@ -194,23 +174,11 @@ class CaptionService:
             return_tensors="pt"
         ).to(self.device)
 
-        # 3. 运行 Forward (注意：output_hidden_states=True)
         outputs = self.model(**inputs, output_hidden_states=True)
-
-        # 4. 提取特征
-        # 取最后一层 hidden state: [batch, seq_len, hidden_size]
         last_hidden_state = outputs.hidden_states[-1]
-
-        # 策略：取 Mean Pooling (平均值) 或者 Last Token (EOS)
-        # 这里用 Mean Pooling 比较稳
         embedding = last_hidden_state.mean(dim=1)
-
-        # 5. 归一化 (ES Cosine 必需)
         embedding = F.normalize(embedding, p=2, dim=1)
-
-        # 6. 转列表
         return embedding.float().cpu().numpy()[0].tolist()
 
 
-# 单例模式
 caption_service = CaptionService()
