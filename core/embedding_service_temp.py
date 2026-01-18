@@ -6,31 +6,31 @@ import os
 
 
 class EmbeddingService:
-    def __init__(self):
-        print("🔄 Loading Qwen3-VL-Embedding-2B (Official Native)...")
-        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-        self.model_path = "Qwen/Qwen3-VL-Embedding-2B"
-
-        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
-
-        print(f"🚀 Embedding Service using device: {self.device}")
-
-        self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            self.model_path,
-            torch_dtype=torch.float32,
-            device_map=self.device,
-            trust_remote_code=True
-        )
-
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_path,
-            min_pixels=256 * 28 * 28,
-            max_pixels=602112,
-            trust_remote_code=True
-        )
-
-        self.TARGET_DIM = 1024
-        print(f"✅ Model loaded. MRL Target Dimension: {self.TARGET_DIM}")
+    # def __init__(self):
+    #     print("🔄 Loading Qwen3-VL-Embedding-2B (Official Native)...")
+    #     os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+    #     self.model_path = "Qwen/Qwen3-VL-Embedding-2B"
+    #
+    #     self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+    #
+    #     print(f"🚀 Embedding Service using device: {self.device}")
+    #
+    #     self.model = Qwen3VLForConditionalGeneration.from_pretrained(
+    #         self.model_path,
+    #         torch_dtype=torch.float32,
+    #         device_map=self.device,
+    #         trust_remote_code=True
+    #     )
+    #
+    #     self.processor = AutoProcessor.from_pretrained(
+    #         self.model_path,
+    #         min_pixels=256 * 28 * 28,
+    #         max_pixels=602112,
+    #         trust_remote_code=True
+    #     )
+    #
+    #     self.TARGET_DIM = 1024
+    #     print(f"✅ Model loaded. MRL Target Dimension: {self.TARGET_DIM}")
 
     def _get_embedding(self, messages):
         """

@@ -18,8 +18,8 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
     def EmbedText(self, request, context):
         try:
             print(f"📝 Request EmbedText: {request.text}")
-            # vector = caption_service.get_embedding(request.text, None)
-            vector = embedding_service.embed_text(request.text)
+            vector = caption_service.get_embedding(request.text, None)
+            # vector = embedding_service.embed_text(request.text)
             return vision_pb2.EmbeddingResponse(vector=vector, dim=len(vector))
         except Exception as e:
             print(f"Error: {e}")
@@ -33,8 +33,8 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             # 1. 下载图片
             image = load_image_from_url(request.url)
             # 2. 计算向量
-            # vector = caption_service.get_embedding(None, image)
-            vector = embedding_service.embed_image(image)
+            vector = caption_service.get_embedding(None, image)
+            # vector = embedding_service.embed_image(image)
             return vision_pb2.EmbeddingResponse(vector=vector, dim=len(vector))
         except Exception as e:
             print(f"Error: {e}")
@@ -46,7 +46,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
         try:
             print(f"🔍 Request OCR: {request.image_url}")
             image = load_image_from_url(request.image_url)
-            prompt = request.prompt if request.prompt else "请精确提取图中的所有文本内容，包括印刷体和清晰的手写体。请忽略水印，并丢弃无意义的文本（如单个标点符号、无上下文的孤立字符）。若图中没有文本、文本无法识别或难以识别，请输出“-1”。若有文本，请直接输出提取到的文本，不要输出任何与图中文本无关的内容。"
+            prompt = request.prompt if request.prompt else "请精确提取图中有意义的文本内容，限中文，英文和阿拉伯数字，包括印刷体和手写体。请忽略水印，并丢弃无意义的文本（如单个标点符号、无上下文的孤立字符）。若图中没有文本、文本无法识别或难以识别，请输出“-1”。若有文本，请直接输出提取到的文本，不要输出任何与图中文本无关的内容。"
             full_text = caption_service.generate_text(image, prompt)
             lines = full_text.split('\n')
             lines = [line.strip() for line in lines if line.strip()]

@@ -5,19 +5,19 @@ import os
 
 
 class EmbeddingService:
-    def __init__(self):
-        print("🔄 Loading AltCLIP model (BAAI)...")
-        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-
-        self.model_name = "BAAI/AltCLIP"
-
-        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
-        print(f"🚀 Embedding Service using device: {self.device}")
-
-        self.model = AltCLIPModel.from_pretrained(self.model_name).to(self.device)
-        self.processor = AltCLIPProcessor.from_pretrained(self.model_name)
-        self.model.eval()
-        print("✅ AltCLIP loaded.")
+    # def __init__(self):
+    #     print("🔄 Loading AltCLIP model (BAAI)...")
+    #     os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+    #
+    #     self.model_name = "BAAI/AltCLIP"
+    #
+    #     self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+    #     print(f"🚀 Embedding Service using device: {self.device}")
+    #
+    #     self.model = AltCLIPModel.from_pretrained(self.model_name).to(self.device)
+    #     self.processor = AltCLIPProcessor.from_pretrained(self.model_name)
+    #     self.model.eval()
+    #     print("✅ AltCLIP loaded.")
 
     @torch.no_grad()
     def embed_text(self, text: str):
