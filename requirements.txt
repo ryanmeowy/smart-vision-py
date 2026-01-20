@@ -2,7 +2,7 @@
 grpcio==1.60.0
 grpcio-tools==1.60.0
 
-# AI 核心 (M1 Mac 会自动安装适配 ARM 的 torch)
+# AI 核心
 torch
 transformers
 pillow

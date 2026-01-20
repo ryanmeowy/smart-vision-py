@@ -14,13 +14,14 @@ class CaptionService:
         print("🔄 Loading Qwen3-VL-2B model...")
         self.model_path = "Qwen/Qwen3-VL-2B-Instruct"
 
-        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        # self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        self.device = "cpu"
 
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             self.model_path,
-            dtype=torch.bfloat16,
+            dtype=torch.float32,
             device_map=self.device,
-            trust_remote_code=True
+            trust_remote_code=True,
         )
 
         self.processor = AutoProcessor.from_pretrained(
@@ -96,7 +97,7 @@ class CaptionService:
             return_tensors="pt",
         ).to(self.device)
 
-        generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
+        generated_ids = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
 
         generated_ids_trimmed = [
             out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
