@@ -152,33 +152,4 @@ class CaptionService:
 
         return output_text_list
 
-    @torch.no_grad()
-    def get_embedding(self, text=None, image_url=None):
-
-        messages = []
-        content = []
-        if image_url:
-            content.append({"type": "image", "image": image_url})
-        if text:
-            content.append({"type": "text", "text": text})
-
-        messages.append({"role": "user", "content": content})
-
-        text_prompt = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self.processor(
-            text=[text_prompt],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt"
-        ).to(self.device)
-
-        outputs = self.model(**inputs, output_hidden_states=True)
-        last_hidden_state = outputs.hidden_states[-1]
-        embedding = last_hidden_state.mean(dim=1)
-        embedding = F.normalize(embedding, p=2, dim=1)
-        return embedding.float().cpu().numpy()[0].tolist()
-
-
 caption_service = CaptionService()

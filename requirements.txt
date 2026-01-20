@@ -19,3 +19,8 @@ accelerate>=0.26.0
 torchvision
 
 numpy==1.26.4
+addict==2.4.0
+einops
+easydict
+
+mlx-vlm
