@@ -71,5 +71,3 @@ if __name__ == "__main__":
     # 日文招牌
     url = "https://images.pexels.com/photos/31320539/pexels-photo-31320539.jpeg"
     print("OCR Result (temp):", service.extract_text(url))
-
-    print("OCR Result (temp):", service.extract_text("https://arg-image.oss-cn-shanghai.aliyuncs.com/images/2025-12-30/1767085556224_pexels-fotios-photos-831430.jpg?Expires=1768989594&OSSAccessKeyId=TMP.3KoetTgJr5k5j3nhBsN1JCwCm1jR3ZxgFBCxcPVJ6GPcPLyFw2XfQDpfivEfHvDWYBpAQb1LjvjwJSbVuuzM33mhCDkLV7&Signature=yTT%2FDwpQ8ALUYVTWn1Vt%2BT2TBWQ%3D"))
