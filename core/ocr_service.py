@@ -1,28 +1,52 @@
-from paddleocr import PaddleOCR
-from utils.image_loader import load_image_from_url
+import re
+
 import numpy as np
+from paddleocr import PaddleOCR
+
+from utils.image_loader import get_image_smart
+
+min_score = 0.6
 
 
 class OCRService:
     def __init__(self):
         print("🔄 Loading PaddleOCR...")
-        self.ocr = PaddleOCR(use_angle_cls=True, lang='ch')
+        self.ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
         print("✅ PaddleOCR loaded.")
 
+    def _is_valid_content(self, text):
+        text = text.strip()
+        if not text:
+            return False
+        if len(text) == 1:
+            if not re.match(r'[\u4e00-\u9fa5a-zA-Z0-9]', text):
+                return False
+        if not re.search(r'[\u4e00-\u9fa5a-zA-Z0-9]', text):
+            return False
+        return True
+
     def extract_text(self, image_url):
-        image = load_image_from_url(image_url)
+        image = get_image_smart(image_url)
         img_array = np.array(image)
         result = self.ocr.ocr(img_array, cls=True)
 
-        full_text = ""
-        lines = []
-        if result and result[0]:
-            for line in result[0]:
-                text = line[1][0]
-                lines.append(text)
-                full_text += text + " "
+        if not result or result[0] is None:
+            return "", []
 
-        return full_text.strip(), lines
+        cleaned_lines = []
+
+        for line_data in result[0]:
+            text_info = line_data[1]
+            text = text_info[0]
+            score = text_info[1]
+            if score < min_score:
+                continue
+            if not self._is_valid_content(text):
+                continue
+            cleaned_lines.append(text)
+        full_text = " ".join(cleaned_lines)
+        return full_text, cleaned_lines
+
 
 ocr_service = OCRService()
 
@@ -47,3 +71,4 @@ if __name__ == "__main__":
     url = "https://images.pexels.com/photos/31320539/pexels-photo-31320539.jpeg"
     print("OCR Result (temp):", service.extract_text(url))
 
+    print("OCR Result (temp):", service.extract_text("https://arg-image.oss-cn-shanghai.aliyuncs.com/images/2025-12-30/1767085556224_pexels-fotios-photos-831430.jpg?Expires=1768989594&OSSAccessKeyId=TMP.3KoetTgJr5k5j3nhBsN1JCwCm1jR3ZxgFBCxcPVJ6GPcPLyFw2XfQDpfivEfHvDWYBpAQb1LjvjwJSbVuuzM33mhCDkLV7&Signature=yTT%2FDwpQ8ALUYVTWn1Vt%2BT2TBWQ%3D"))

@@ -1,9 +1,10 @@
 import json
-import re
 import os
+import re
 
 from mlx_vlm import load, generate
-from utils.image_loader import load_image_from_url
+
+from utils.image_loader import get_image_smart
 
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
@@ -29,7 +30,7 @@ class CaptionService:
         print(f"✅ {self.model_path} loaded")
 
     def generate_name(self, image_url: str):
-        image = load_image_from_url(image_url)
+        image = get_image_smart(image_url)
         prompt = """为这张图片起一个3-6字的中文标题，要求美感、简洁、诗意。
         不能有除中文外的其他字符或者标点符号。标题不能超过6个字。
         直接输出标题，不要包含其他字符。
@@ -55,7 +56,7 @@ class CaptionService:
         return _clean_json_output(output)
 
     def generate_tags(self, image_url: str):
-        image = load_image_from_url(image_url)
+        image = get_image_smart(image_url)
         prompt = """分析图片，提取3-5个核心中文标签(物体、场景、风格)。
         严格返回JSON字符串数组，例如：["风景", "雪山", "日落"]。
         不要输出Markdown格式，不要输出任何解释性文字。标签数量不要少于3个"""
@@ -77,7 +78,7 @@ class CaptionService:
         return _clean_json_output(output)
 
     def extract_text(self, image_url: str):
-        image = load_image_from_url(image_url)
+        image = get_image_smart(image_url)
         prompt = """提取图中的所有文本内容，仅限中文、英文和阿拉伯数字，包括印刷体和清晰的手写体。
         忽略水印，并丢弃无意义的文本，比如如单个标点符号、无上下文的孤立字符。
         若图中没有文本、文本无法识别或难以识别，请输出"-1"。

@@ -7,7 +7,6 @@ import vision_pb2
 import vision_pb2_grpc
 from core.caption_service import caption_service
 from core.embedding_service import embedding_service
-from utils.image_loader import load_image_from_url
 from core.ocr_service import ocr_service
 
 
@@ -27,10 +26,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
     def EmbedImage(self, request, context):
         try:
             print(f"🖼️ Request EmbedImage: {request.url}")
-            # 1. 下载图片
-            image = load_image_from_url(request.url)
-            # 2. 计算向量
-            vector = embedding_service.embed_image(image)
+            vector = embedding_service.embed_image(request.url)
             return vision_pb2.EmbeddingResponse(vector=vector[0].tolist(), dim=vector[0].size)
         except Exception as e:
             print(f"Error: {e}")
