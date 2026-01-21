@@ -1,156 +1,110 @@
-import torch
+import json
+import re
 import os
-from transformers import Qwen3VLForConditionalGeneration, AutoProcessor, TextIteratorStreamer
-from qwen_vl_utils import process_vision_info
-from threading import Thread
-import torch.nn.functional as F
 
-torch.set_num_threads(4)
+from mlx_vlm import load, generate
+from utils.image_loader import load_image_from_url
+
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
+def _clean_json_output(text: str):
+    """清洗 LLM 返回的 JSON 字符串"""
+    text = re.sub(r"```json\s*", "", text)
+    text = re.sub(r"```\s*$", "", text)
+    text = text.strip()
+    if not (text.startswith('{') and text.endswith('}')) and \
+            not (text.startswith('[') and text.endswith(']')) and \
+            not (text.startswith('"') and text.endswith('"')):
+        return text
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return text
 
 class CaptionService:
     def __init__(self):
-        print("🔄 Loading Qwen3-VL-2B model...")
-        self.model_path = "Qwen/Qwen3-VL-2B-Instruct"
+        self.model_path = "mlx-community/Qwen2-VL-7B-Instruct-4bit"
+        print(f"🔄 Loading: {self.model_path} ...")
+        self.model, self.processor = load(self.model_path)
+        print(f"✅ {self.model_path} loaded")
 
-        # self.device = "mps" if torch.backends.mps.is_available() else "cpu"
-        self.device = "cpu"
+    def generate_name(self, image_url: str):
+        image = load_image_from_url(image_url)
+        prompt = """为这张图片起一个3-6字的中文标题，要求美感、简洁、诗意。
+        不能有除中文外的其他字符或者标点符号。标题不能超过6个字。
+        直接输出标题，不要包含其他字符。
+        示例1：
+        图片内容：一只橘猫在睡觉
+        标题：橘猫午睡
+        示例2：
+        图片内容：繁华的城市夜景
+        标题：城市霓虹"""
+        formatted_prompt = self.processor.apply_chat_template(
+            [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
+            add_generation_prompt=True,
+        )
+        output = generate(
+            self.model,
+            self.processor,
+            image=image,
+            prompt=formatted_prompt,
+            verbose=False,
+            max_tokens=10,
+            temp=0.5
+        )
+        return _clean_json_output(output)
 
-        self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            self.model_path,
-            dtype=torch.float32,
-            device_map=self.device,
-            trust_remote_code=True,
+    def generate_tags(self, image_url: str):
+        image = load_image_from_url(image_url)
+        prompt = """分析图片，提取3-5个核心中文标签(物体、场景、风格)。
+        严格返回JSON字符串数组，例如：["风景", "雪山", "日落"]。
+        不要输出Markdown格式，不要输出任何解释性文字。标签数量不要少于3个"""
+
+        formatted_prompt = self.processor.apply_chat_template(
+            [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
+            add_generation_prompt=True,
         )
 
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_path,
-            max_pixels=602112,
-            trust_remote_code=True)
-        print(f"✅ Qwen3-VL loaded on {self.device}.")
-
-    def stream_generate(self, image_url: str, prompt: str = "请详细描述这张图片"):
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image_url},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
-
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+        output = generate(
+            self.model,
+            self.processor,
+            image=image,
+            prompt=formatted_prompt,
+            verbose=False,
+            max_tokens=200,
+            temp=0.7
         )
-        image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
+        return _clean_json_output(output)
 
-        streamer = TextIteratorStreamer(
-            self.processor.tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True
+    def extract_text(self, image_url: str):
+        image = load_image_from_url(image_url)
+        prompt = """提取图中的所有文本内容，仅限中文、英文和阿拉伯数字，包括印刷体和清晰的手写体。
+        忽略水印，并丢弃无意义的文本，比如如单个标点符号、无上下文的孤立字符。
+        若图中没有文本、文本无法识别或难以识别，请输出"-1"。
+        若有文本，请直接输出提取到的文本，不要输出任何与图中文本无关的内容。"""
+
+        formatted_prompt = self.processor.apply_chat_template(
+            [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
+            add_generation_prompt=True,
         )
 
-        generation_kwargs = dict(
-            **inputs,
-            streamer=streamer,
-            max_new_tokens=512,
-            temperature=0.7,
-            do_sample=True
+        output = generate(
+            self.model,
+            self.processor,
+            image=image,
+            prompt=formatted_prompt,
+            verbose=False,
+            max_tokens=200,
+            temp=0.1
         )
-
-        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
-        thread.start()
-
-        for new_text in streamer:
-            yield new_text
-
-    def generate_text(self, image_url: str, prompt: str):
-
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image_url},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
-
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
-
-        generated_ids = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
-
-        generated_ids_trimmed = [
-            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        output_text = self.processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-        return output_text[0]
-
-    def generate_text_list(self, image_url: str, prompt: str) -> list[str]:
-
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image_url},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
-
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-
-        image_inputs, video_inputs = process_vision_info(messages)
-
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
-
-        generated_ids = self.model.generate(
-            **inputs,
-            max_new_tokens=1024,
-            num_return_sequences=1,
-            do_sample=True,
-            temperature=1
-        )
-
-        input_token_len = inputs.input_ids.shape[1]
-
-        generated_ids_trimmed = [
-            out_ids[input_token_len:] for out_ids in generated_ids
-        ]
-
-        output_text_list = self.processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-
-        return output_text_list
+        return _clean_json_output(output)
 
 caption_service = CaptionService()
+
+
+if __name__ == "__main__":
+    service = CaptionService()
+    url = "https://images.pexels.com/photos/7661135/pexels-photo-7661135.jpeg"
+
+    print("Name:", service.generate_name(url))
+    print("Tags:", service.generate_tags(url))

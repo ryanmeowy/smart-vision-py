@@ -4,7 +4,7 @@ grpcio-tools==1.60.0
 
 # AI 核心
 torch
-transformers
+transformers==4.49.0
 pillow
 requests
 
