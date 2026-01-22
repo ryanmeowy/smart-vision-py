@@ -201,6 +201,30 @@ class CaptionService:
 
         return _clean_graph_triples(output)
 
+    def stream_generate(self, image_url: str, prompt: str):
+        image = get_image_smart(image_url)
+
+        formatted_prompt = self.processor.apply_chat_template(
+            [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
+            add_generation_prompt=True,
+        )
+        
+        # 使用流式生成模式
+        stream_output = generate(
+            self.model,
+            self.processor,
+            image=image,
+            prompt=formatted_prompt,
+            verbose=False,
+            max_tokens=500,
+            temp=0.7,
+            stream=True  # 启用流式输出
+        )
+        
+        # 逐个yield生成的token
+        for chunk in stream_output:
+            yield chunk
+
 caption_service = CaptionService()
 
 
