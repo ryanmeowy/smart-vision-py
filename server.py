@@ -67,6 +67,16 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_details(str(e))
             return vision_pb2.OcrResponse()
 
+    def ExtractGraphTriples(self, request, context):
+        try:
+            print(f"🔍 Request ExtractGraphTriples: {request.image_url}")
+            result = caption_service.extract_graph_triples(request.image_url)
+            return vision_pb2.GraphTriplesResponse(triple=result)
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return vision_pb2.GraphTriplesResponse()
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
