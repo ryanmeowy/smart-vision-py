@@ -78,6 +78,22 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_details(str(e))
             return vision_pb2.GraphTriplesResponse()
 
+    def GenerateCaption(self, request, context):
+        try:
+            print(f"✨ Request Gen: {request.image_url}")
+
+            prompt = request.prompt if request.prompt else "请详细描述这张图片"
+
+            for chunk in caption_service.stream_generate(request.image_url, prompt):
+                yield vision_pb2.StringResponse(content=chunk)
+
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            yield vision_pb2.StringResponse(content=f"[Error: {str(e)}]")
+
+
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     vision_pb2_grpc.add_VisionServiceServicer_to_server(VisionServer(), server)
