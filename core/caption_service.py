@@ -8,6 +8,7 @@ from utils.image_loader import get_image_smart
 
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
+
 def _clean_json_output(text: str):
     text = re.sub(r"```json\s*", "", text)
     text = re.sub(r"```\s*$", "", text)
@@ -16,6 +17,7 @@ def _clean_json_output(text: str):
         return json.loads(text)
     except json.JSONDecodeError:
         return []
+
 
 def _clean_and_validate_title(text: str) -> str:
     if not text:
@@ -44,12 +46,13 @@ def _clean_and_validate_title(text: str) -> str:
 
     return clean_text
 
+
 def _clean_tags_output(raw_text: str) -> list[str]:
     if not raw_text:
         return []
 
     try:
-        match = re.search(r'\[.*?\]', raw_text, re.DOTALL)
+        match = re.search(r'\[.*?]', raw_text, re.DOTALL)
         if match:
             json_str = match.group()
             try:
@@ -85,7 +88,8 @@ def _clean_tags_output(raw_text: str) -> list[str]:
         print(f"❌ Tags parsing error: {e}, raw: {raw_text}")
         return ["未分类"]
 
-def _clean_graph_triples(text:str):
+
+def _clean_graph_triples(text: str):
     try:
         text = re.sub(r"```json\s*", "", text)
         text = re.sub(r"```\s*$", "", text)
@@ -113,7 +117,7 @@ def _clean_graph_triples(text:str):
 
 class CaptionService:
     def __init__(self):
-        self.model_path = "mlx-community/Qwen2-VL-7B-Instruct-4bit"
+        self.model_path = "mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
         print(f"🔄 Loading: {self.model_path} ...")
         self.model, self.processor = load(self.model_path)
         print(f"✅ {self.model_path} loaded")
@@ -173,15 +177,24 @@ class CaptionService:
     def extract_graph_triples(self, image_url: str):
         image = get_image_smart(image_url)
         prompt = """
-                请分析图片，提取图中主要物体之间的空间关系或动作关系。
+                请分析图片，提取图中主要物体之间的 SPO 三元组。
                 请以 JSON 数组格式返回，每个元素包含三个字段：
                 - "s": Subject (主体，名词)
                 - "p": Predicate (关系，如：位于、拿着、穿着、包含)
                 - "o": Object (客体，名词)
+                
+                【示例】：
+                输入：一张男人站在山顶看日出的图。
+                输出：
+                [
+                  {"s": "男子", "p": "站在", "o": "山顶"},
+                  {"s": "男子", "p": "面向", "o": "太阳"},
+                  {"s": "云海", "p": "环绕", "o": "山腰"}
+                ]
+                
+                请输出 JSON 数组， 不要Markdown代码块，必须是中文。
+        """
 
-                示例：[{"s": "男子", "p": "穿着", "o": "红色衬衫"}, {"s": "猫", "p": "躺在", "o": "地毯"}]
-                只返回JSON，不要Markdown代码块。
-                """
         formatted_prompt = self.processor.apply_chat_template(
             [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
             add_generation_prompt=True,
@@ -194,20 +207,20 @@ class CaptionService:
             verbose=False,
             max_tokens=256,
             temp=0.3,
-            repetition_penalty=1.15,
+            repetition_penalty=1.0,
             do_sample=True,
             top_p=0.9
         )
 
         return _clean_graph_triples(output)
 
-caption_service = CaptionService()
 
+caption_service = CaptionService()
 
 if __name__ == "__main__":
     service = CaptionService()
-    url = "https://images.pexels.com/photos/28388268/pexels-photo-28388268.jpeg"
+    url = "https://images.pexels.com/photos/5026339/pexels-photo-5026339.jpeg"
 
-    print("Name:", service.generate_name(url))
-    print("Tags:", service.generate_tags(url))
-    print("Graph Triples:",service.extract_graph_triples(url))
+    # print("Name:", service.generate_name(url))
+    # print("Tags:", service.generate_tags(url))
+    print("Graph Triples:", service.extract_graph_triples(url))
