@@ -238,12 +238,49 @@ class CaptionService:
         for chunk in stream_output:
             yield chunk
 
+    def parse_query_to_graph(self, query:str):
+        system_prompt = """
+                你是一个搜索意图解析器。请提取用户查询中的【实体关系】，并标准为 JSON 三元组。
+                规则：
+                1. {"s": "主体", "p": "关系", "o": "客体"}
+                2. 只输出 JSON 数组，不要 Markdown。
+
+                示例：
+                输入："找一只在睡觉的橘猫" -> 输出：[{"s":"猫", "p":"状态", "o":"睡觉"}, {"s":"猫", "p":"颜色", "o":"橘色"}]
+                输入："红色的法拉利" -> 输出：[{"s":"法拉利", "p":"颜色", "o":"红色"}]
+                输入: "爬雪山的男人" -> 输出: [{"s":"男人", "p":"爬", "o":"雪山"}, {"s":"男人", "p":"动作", "o":"爬"}]
+                """
+        full_text_prompt = f"{system_prompt}\n输入：{query}\n输出："
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": full_text_prompt},
+                ],
+            }
+        ]
+
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+
+        output = generate(
+            self.model,
+            self.processor,
+            prompt=text,
+            max_tokens=256,
+            temperature=0.1,
+            verbose=False
+        )
+        return _clean_json_output(output)
+
 caption_service = CaptionService()
 
 if __name__ == "__main__":
     service = CaptionService()
-    url = "https://images.pexels.com/photos/5026339/pexels-photo-5026339.jpeg"
+    # url = "https://images.pexels.com/photos/5026339/pexels-photo-5026339.jpeg"
 
     # print("Name:", service.generate_name(url))
     # print("Tags:", service.generate_tags(url))
-    print("Graph Triples:", service.extract_graph_triples(url))
+    # print("Graph Triples:", service.extract_graph_triples(url))
+    print(service.parse_query_to_graph("奔跑的男人"))

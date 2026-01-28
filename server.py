@@ -93,6 +93,16 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_details(str(e))
             yield vision_pb2.StringResponse(content=f"[Error: {str(e)}]")
 
+    def ParseQueryToGraph(self, request, context):
+        try:
+            print(f"✨ request text: {request.text}")
+            result = caption_service.parse_query_to_graph(request.text)
+            return vision_pb2.GraphTriplesResponse(triple=result)
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return vision_pb2.GraphTriplesResponse()
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
