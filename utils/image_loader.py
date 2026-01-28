@@ -22,7 +22,7 @@ def load_image_from_url(url: str):
         raise e
 
 
-image_cache = TTLCache(maxsize=100, ttl=60)
+image_cache = TTLCache(maxsize=100, ttl=60*3)
 cache_lock = Lock()
 
 def get_image_smart(url: str):

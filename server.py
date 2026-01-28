@@ -105,7 +105,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             return vision_pb2.GraphTriplesResponse()
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     vision_pb2_grpc.add_VisionServiceServicer_to_server(VisionServer(), server)
     port = '[::]:50051'
     server.add_insecure_port(port)
