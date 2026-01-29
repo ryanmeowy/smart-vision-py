@@ -10,7 +10,7 @@ requests
 
 # OCR (飞桨)
 paddlepaddle
-paddleocr
+paddleocr==2.7.3
 opencv-python-headless
 
 # Qwen3-VL 依赖
@@ -24,3 +24,4 @@ einops
 easydict
 
 mlx-vlm
+cachetools

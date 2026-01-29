@@ -1,6 +1,7 @@
 import torch
 from transformers import ChineseCLIPProcessor, ChineseCLIPModel
-from utils.image_loader import load_image_from_url
+
+from utils.image_loader import get_image_smart
 
 
 class ChineseClipEmbedder:
@@ -22,7 +23,7 @@ class ChineseClipEmbedder:
 
 
     def embed_image(self, image_input):
-        image = load_image_from_url(image_input)
+        image = get_image_smart(image_input)
         inputs = self.processor(images=[image], return_tensors="pt").to(self.device)
 
         with torch.no_grad():

@@ -7,7 +7,6 @@ import vision_pb2
 import vision_pb2_grpc
 from core.caption_service import caption_service
 from core.embedding_service import embedding_service
-from utils.image_loader import load_image_from_url
 from core.ocr_service import ocr_service
 
 
@@ -27,10 +26,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
     def EmbedImage(self, request, context):
         try:
             print(f"🖼️ Request EmbedImage: {request.url}")
-            # 1. 下载图片
-            image = load_image_from_url(request.url)
-            # 2. 计算向量
-            vector = embedding_service.embed_image(image)
+            vector = embedding_service.embed_image(request.url)
             return vision_pb2.EmbeddingResponse(vector=vector[0].tolist(), dim=vector[0].size)
         except Exception as e:
             print(f"Error: {e}")
@@ -71,9 +67,45 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_details(str(e))
             return vision_pb2.OcrResponse()
 
+    def ExtractGraphTriples(self, request, context):
+        try:
+            print(f"🔍 Request ExtractGraphTriples: {request.image_url}")
+            result = caption_service.extract_graph_triples(request.image_url)
+            return vision_pb2.GraphTriplesResponse(triple=result)
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return vision_pb2.GraphTriplesResponse()
+
+    def GenerateCaption(self, request, context):
+        try:
+            print(f"✨ Request Gen: {request.image_url}")
+
+            prompt = request.prompt if request.prompt else "请详细描述这张图片"
+
+            for chunk in caption_service.stream_generate(request.image_url, prompt):
+                yield vision_pb2.StringResponse(content=chunk)
+
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            yield vision_pb2.StringResponse(content=f"[Error: {str(e)}]")
+
+    def ParseQueryToGraph(self, request, context):
+        try:
+            print(f"✨ request text: {request.text}")
+            result = caption_service.parse_query_to_graph(request.text)
+            return vision_pb2.GraphTriplesResponse(triple=result)
+        except Exception as e:
+            print(f"Error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return vision_pb2.GraphTriplesResponse()
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     vision_pb2_grpc.add_VisionServiceServicer_to_server(VisionServer(), server)
     port = '[::]:50051'
     server.add_insecure_port(port)
