@@ -180,7 +180,7 @@ class CaptionService:
                 请分析图片，提取图中主要物体之间的 SPO 三元组。
                 请以 JSON 数组格式返回，每个元素包含三个字段：
                 - "s": Subject (主体，名词)
-                - "p": Predicate (关系，如：位于、拿着、穿着、包含)
+                - "p": Predicate (关系，如：位于、拿着、穿着、包含，动词/介词)
                 - "o": Object (客体，名词)
                 
                 【示例】：
@@ -192,7 +192,7 @@ class CaptionService:
                   {"s": "云海", "p": "环绕", "o": "山腰"}
                 ]
                 
-                请输出 JSON 数组， 不要Markdown代码块，必须是中文。
+                请输出 JSON 数组，不要Markdown代码块，必须是中文。
         """
 
         formatted_prompt = self.processor.apply_chat_template(
@@ -238,17 +238,19 @@ class CaptionService:
         for chunk in stream_output:
             yield chunk
 
-    def parse_query_to_graph(self, query:str):
+    def parse_query_to_graph(self, query: str):
         system_prompt = """
                 你是一个搜索意图解析器。请提取用户查询中的【实体关系】，并标准为 JSON 三元组。
-                规则：
-                1. {"s": "主体", "p": "关系", "o": "客体"}
-                2. 只输出 JSON 数组，不要 Markdown。
+                - "s": Subject (主体，名词)
+                - "p": Predicate (关系，如：位于、拿着、穿着、包含，动词/介词)
+                - "o": Object (客体，名词)
 
-                示例：
-                输入："找一只在睡觉的橘猫" -> 输出：[{"s":"猫", "p":"状态", "o":"睡觉"}, {"s":"猫", "p":"颜色", "o":"橘色"}]
+                【示例】：
+                输入："找一只在睡觉的橘猫" -> 输出：[{"s":"橘猫", "p":"状态", "o":"睡觉"}, {"s":"橘猫", "p":"颜色", "o":"橘色"}]
                 输入："红色的法拉利" -> 输出：[{"s":"法拉利", "p":"颜色", "o":"红色"}]
                 输入: "爬雪山的男人" -> 输出: [{"s":"男人", "p":"爬", "o":"雪山"}, {"s":"男人", "p":"动作", "o":"爬"}]
+                
+                请输出 JSON 数组，不要Markdown代码块，必须是中文。
                 """
         full_text_prompt = f"{system_prompt}\n输入：{query}\n输出："
         messages = [
@@ -273,6 +275,7 @@ class CaptionService:
             verbose=False
         )
         return _clean_json_output(output)
+
 
 caption_service = CaptionService()
 
