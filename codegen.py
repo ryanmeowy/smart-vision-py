@@ -1,13 +1,18 @@
-import os
+import subprocess
+import sys
 
-command = (
-    "python -m grpc_tools.protoc "
-    "-I./protos "
-    "--python_out=. "
-    "--grpc_python_out=. "
-    "./protos/vision.proto"
-)
+command = [
+    sys.executable,
+    "-m",
+    "grpc_tools.protoc",
+    "-I./protos",
+    "--python_out=.",
+    "--grpc_python_out=.",
+    "./protos/vision.proto",
+]
 
-print(f"Executing: {command}")
-os.system(command)
+print("Executing:", " ".join(command))
+completed = subprocess.run(command, check=False)
+if completed.returncode != 0:
+    raise SystemExit(completed.returncode)
 print("✅ gRPC code generated successfully!")

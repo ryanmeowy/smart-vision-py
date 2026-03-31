@@ -25,8 +25,15 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
 
     def EmbedImage(self, request, context):
         try:
-            print(f"🖼️ Request EmbedImage: {request.url}")
-            vector = embedding_service.embed_image(request.url)
+            image_source_type = request.WhichOneof("image_input")
+            if image_source_type == "url":
+                print(f"🖼️ Request EmbedImage(url): {request.url}")
+                vector = embedding_service.embed_image(request.url)
+            elif image_source_type == "image_bytes":
+                print(f"🖼️ Request EmbedImage(bytes): size={len(request.image_bytes)}, mime={request.mime_type}")
+                vector = embedding_service.embed_image(request.image_bytes)
+            else:
+                raise ValueError("ImageRequest must provide either url or image_bytes")
             return vision_pb2.EmbeddingResponse(vector=vector[0].tolist(), dim=vector[0].size)
         except Exception as e:
             print(f"Error: {e}")
@@ -103,6 +110,7 @@ class VisionServer(vision_pb2_grpc.VisionServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return vision_pb2.GraphTriplesResponse()
+
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
